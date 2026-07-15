@@ -1,12 +1,17 @@
-import globals from "globals";
-import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
-
-/** @type {import('eslint').Linter.Config[]} */
-export default [
-  {files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"]},
-  {languageOptions: { globals: globals.node }},
-  pluginJs.configs.recommended,
+export default tseslint.config(
+  {
+    ignores: ['dist/**', '.test-dist/**'],
+  },
+  eslint.configs.recommended,
   ...tseslint.configs.recommended,
-];
+  {
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+    },
+  },
+);

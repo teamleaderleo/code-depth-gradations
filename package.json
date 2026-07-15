@@ -2,84 +2,163 @@
   "name": "code-depth-gradations",
   "publisher": "teamleaderleo",
   "displayName": "Code Depth Gradations",
-  "description": "Visualize code depth through background color gradations based on indentation levels",
-  "version": "0.0.1",
+  "description": "Color code by indentation depth with lightweight, theme-aware line gradations.",
+  "version": "0.1.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/teamleaderleo/code-depth-gradations"
+    "url": "https://github.com/teamleaderleo/code-depth-gradations.git"
   },
-  "icon": "icon.png",
+  "bugs": {
+    "url": "https://github.com/teamleaderleo/code-depth-gradations/issues"
+  },
+  "homepage": "https://github.com/teamleaderleo/code-depth-gradations#readme",
   "keywords": [
     "indentation",
+    "depth",
+    "gradations",
     "visualization",
-    "code depth",
-    "formatting",
-    "color",
-    "background",
     "readability"
   ],
   "categories": [
-    "Other",
-    "Formatters",
-    "Visualization"
+    "Visualization",
+    "Other"
   ],
   "engines": {
     "vscode": "^1.86.0"
   },
-  "license": "MIT",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:code-depth-gradations.toggle",
+    "onCommand:code-depth-gradations.refresh"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "contributes": {
     "commands": [
       {
         "command": "code-depth-gradations.toggle",
-        "title": "Toggle Code Depth Gradations"
+        "title": "Code Depth Gradations: Toggle"
+      },
+      {
+        "command": "code-depth-gradations.refresh",
+        "title": "Code Depth Gradations: Refresh"
       }
     ],
     "configuration": {
       "title": "Code Depth Gradations",
+      "type": "object",
       "properties": {
         "codeDepthGradations.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable/disable code depth visualization"
+          "description": "Show indentation-depth gradations in text editors."
+        },
+        "codeDepthGradations.indentSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 0,
+          "description": "Columns per depth level. Zero uses each editor's detected tab size."
+        },
+        "codeDepthGradations.renderStyle": {
+          "type": "string",
+          "enum": [
+            "wholeLine",
+            "indentation"
+          ],
+          "enumDescriptions": [
+            "Tint the complete line.",
+            "Tint only the leading whitespace."
+          ],
+          "default": "wholeLine",
+          "description": "Area covered by each depth gradation."
+        },
+        "codeDepthGradations.overflow": {
+          "type": "string",
+          "enum": [
+            "clamp",
+            "cycle"
+          ],
+          "enumDescriptions": [
+            "Keep using the final palette color for deeper lines.",
+            "Repeat the palette for deeper lines."
+          ],
+          "default": "clamp",
+          "description": "How depths beyond the palette length are colored."
         },
         "codeDepthGradations.colors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rgba(99, 179, 237, 0.045)",
+            "rgba(129, 140, 248, 0.055)",
+            "rgba(167, 139, 250, 0.065)",
+            "rgba(232, 121, 249, 0.075)",
+            "rgba(244, 114, 182, 0.085)",
+            "rgba(251, 113, 133, 0.095)"
+          ],
+          "description": "Base CSS colors, one per indentation depth."
+        },
+        "codeDepthGradations.lightColors": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [
-            "rgba(255, 255, 255, 0.1)",
-            "rgba(64, 128, 255, 0.1)",
-            "rgba(128, 64, 255, 0.1)",
-            "rgba(255, 64, 128, 0.1)",
-            "rgba(64, 255, 128, 0.1)"
+            "rgba(37, 99, 235, 0.055)",
+            "rgba(79, 70, 229, 0.065)",
+            "rgba(124, 58, 237, 0.075)",
+            "rgba(192, 38, 211, 0.085)",
+            "rgba(219, 39, 119, 0.095)",
+            "rgba(225, 29, 72, 0.105)"
           ],
-          "description": "Colors for different depth levels (RGBA format)"
+          "description": "Optional palette used by light themes. Empty values fall back to colors."
+        },
+        "codeDepthGradations.darkColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rgba(125, 211, 252, 0.045)",
+            "rgba(165, 180, 252, 0.055)",
+            "rgba(196, 181, 253, 0.065)",
+            "rgba(240, 171, 252, 0.075)",
+            "rgba(249, 168, 212, 0.085)",
+            "rgba(253, 164, 175, 0.095)"
+          ],
+          "description": "Optional palette used by dark themes. Empty values fall back to colors."
         }
       }
     }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
+    "compile": "webpack --mode development",
+    "watch": "webpack --watch --mode development",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "lint": "eslint src"
+    "typecheck": "tsc --noEmit",
+    "compile:test": "tsc -p tsconfig.test.json",
+    "test": "npm run compile:test && node --test .test-dist/test",
+    "lint": "eslint src test",
+    "check": "npm run lint && npm run typecheck && npm test && npm run package"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
-    "@types/node": "~18.19.74",
+    "@types/node": "^18.19.74",
     "@types/vscode": "^1.86.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.57.0",
-    "globals": "^15.14.0",
+    "eslint": "^9.19.0",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.22.0",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4"
   }
