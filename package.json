@@ -2,7 +2,7 @@
   "name": "code-depth-gradations",
   "publisher": "teamleaderleo",
   "displayName": "Code Depth Gradations",
-  "description": "Color code by indentation depth with lightweight, theme-aware line gradations.",
+  "description": "Show indentation depth with lightweight, theme-relative whole-line gradations.",
   "version": "0.1.0",
   "license": "MIT",
   "repository": {
@@ -72,70 +72,63 @@
             "indentation"
           ],
           "enumDescriptions": [
-            "Tint the complete line.",
+            "Tint the complete line with one solid shade.",
             "Tint only the leading whitespace."
           ],
           "default": "wholeLine",
           "description": "Area covered by each depth gradation."
         },
-        "codeDepthGradations.overflow": {
+        "codeDepthGradations.maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 16,
+          "description": "Number of distinct depth shades. Deeper lines keep the final shade."
+        },
+        "codeDepthGradations.tintMode": {
           "type": "string",
           "enum": [
-            "clamp",
-            "cycle"
+            "auto",
+            "lighter",
+            "darker",
+            "custom"
           ],
           "enumDescriptions": [
-            "Keep using the final palette color for deeper lines.",
-            "Repeat the palette for deeper lines."
+            "Lighten dark themes and darken light themes.",
+            "Blend white into the active editor background.",
+            "Blend black into the active editor background.",
+            "Blend the custom tint into the active editor background."
           ],
-          "default": "clamp",
-          "description": "How depths beyond the palette length are colored."
+          "default": "auto",
+          "description": "How depth shades move away from the active theme's editor background."
         },
-        "codeDepthGradations.colors": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "rgba(99, 179, 237, 0.045)",
-            "rgba(129, 140, 248, 0.055)",
-            "rgba(167, 139, 250, 0.065)",
-            "rgba(232, 121, 249, 0.075)",
-            "rgba(244, 114, 182, 0.085)",
-            "rgba(251, 113, 133, 0.095)"
-          ],
-          "description": "Base CSS colors, one per indentation depth."
+        "codeDepthGradations.customTint": {
+          "type": "string",
+          "default": "#7c3aed",
+          "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "patternErrorMessage": "Use a 3- or 6-digit hex color such as #7c3aed.",
+          "description": "Tint used when tintMode is custom. The tint stays translucent and blends with the editor background."
         },
-        "codeDepthGradations.lightColors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "rgba(37, 99, 235, 0.055)",
-            "rgba(79, 70, 229, 0.065)",
-            "rgba(124, 58, 237, 0.075)",
-            "rgba(192, 38, 211, 0.085)",
-            "rgba(219, 39, 119, 0.095)",
-            "rgba(225, 29, 72, 0.105)"
-          ],
-          "description": "Optional palette used by light themes. Empty values fall back to colors."
+        "codeDepthGradations.minimumOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.012,
+          "description": "Tint opacity at indentation depth 1."
         },
-        "codeDepthGradations.darkColors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "rgba(125, 211, 252, 0.045)",
-            "rgba(165, 180, 252, 0.055)",
-            "rgba(196, 181, 253, 0.065)",
-            "rgba(240, 171, 252, 0.075)",
-            "rgba(249, 168, 212, 0.085)",
-            "rgba(253, 164, 175, 0.095)"
-          ],
-          "description": "Optional palette used by dark themes. Empty values fall back to colors."
+        "codeDepthGradations.maximumOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.11,
+          "description": "Tint opacity at maxDepth and beyond."
+        },
+        "codeDepthGradations.curveExponent": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 5,
+          "default": 1.4,
+          "description": "Controls how the tint grows with depth. One is linear; larger values keep shallow levels subtler."
         }
       }
     }

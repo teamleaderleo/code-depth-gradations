@@ -1,34 +1,33 @@
 import * as vscode from 'vscode';
 import {
+  depthSlot,
   indentationDepth,
+  normalizeHexColor,
   normalizeIndentSize,
-  paletteIndex,
-  type PaletteOverflow,
+  opacityForDepth,
+  rgbaFromHex,
+  type TintMode,
 } from './depth';
 
 const CONFIGURATION_SECTION = 'codeDepthGradations';
 const TOGGLE_COMMAND = 'code-depth-gradations.toggle';
 const REFRESH_COMMAND = 'code-depth-gradations.refresh';
-
-const FALLBACK_COLORS = [
-  'rgba(99, 179, 237, 0.045)',
-  'rgba(129, 140, 248, 0.055)',
-  'rgba(167, 139, 250, 0.065)',
-  'rgba(232, 121, 249, 0.075)',
-  'rgba(244, 114, 182, 0.085)',
-  'rgba(251, 113, 133, 0.095)',
-];
+const LIGHT_TINT = '#ffffff';
+const DARK_TINT = '#000000';
+const DEFAULT_CUSTOM_TINT = '#7c3aed';
 
 type RenderStyle = 'wholeLine' | 'indentation';
 
 interface Settings {
   readonly enabled: boolean;
-  readonly colors: readonly string[];
-  readonly lightColors: readonly string[];
-  readonly darkColors: readonly string[];
-  readonly overflow: PaletteOverflow;
   readonly renderStyle: RenderStyle;
   readonly indentSize: number;
+  readonly maxDepth: number;
+  readonly tintMode: TintMode;
+  readonly customTint: string;
+  readonly minimumOpacity: number;
+  readonly maximumOpacity: number;
+  readonly curveExponent: number;
 }
 
 class DepthDecorationController implements vscode.Disposable {
@@ -58,6 +57,10 @@ class DepthDecorationController implements vscode.Disposable {
       vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleVisibleEditors()),
       vscode.window.onDidChangeTextEditorVisibleRanges((event) => this.schedule(event.textEditor)),
       vscode.window.onDidChangeTextEditorOptions((event) => this.schedule(event.textEditor)),
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        this.rebuildDecorationTypes();
+        this.scheduleVisibleEditors();
+      }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         for (const editor of vscode.window.visibleTextEditors) {
           if (editor.document === event.document) {
@@ -125,30 +128,29 @@ class DepthDecorationController implements vscode.Disposable {
       return;
     }
 
-    const paletteLength = Math.max(
-      this.settings.colors.length,
-      this.settings.lightColors.length,
-      this.settings.darkColors.length,
-    );
+    const tint = resolveTint(this.settings, vscode.window.activeColorTheme.kind);
 
-    for (let index = 0; index < paletteLength; index += 1) {
-      const baseColor = colorAt(this.settings.colors, index, this.settings.overflow);
-      const lightColor = colorAt(this.settings.lightColors, index, this.settings.overflow);
-      const darkColor = colorAt(this.settings.darkColors, index, this.settings.overflow);
-      const options: vscode.DecorationRenderOptions = {
-        backgroundColor: baseColor,
+    for (let depth = 1; depth <= this.settings.maxDepth; depth += 1) {
+      const opacity = opacityForDepth(
+        depth,
+        this.settings.maxDepth,
+        this.settings.minimumOpacity,
+        this.settings.maximumOpacity,
+        this.settings.curveExponent,
+      );
+      if (opacity === undefined) {
+        continue;
+      }
+
+      const backgroundColor = rgbaFromHex(tint, opacity);
+      if (!backgroundColor) {
+        continue;
+      }
+
+      this.decorationTypes.push(vscode.window.createTextEditorDecorationType({
+        backgroundColor,
         isWholeLine: this.settings.renderStyle === 'wholeLine',
-      };
-
-      if (lightColor) {
-        options.light = { backgroundColor: lightColor };
-      }
-
-      if (darkColor) {
-        options.dark = { backgroundColor: darkColor };
-      }
-
-      this.decorationTypes.push(vscode.window.createTextEditorDecorationType(options));
+      }));
     }
   }
 
@@ -188,8 +190,8 @@ class DepthDecorationController implements vscode.Disposable {
 
         const line = editor.document.lineAt(lineNumber);
         const depth = indentationDepth(line.text, indentSize);
-        const index = paletteIndex(depth, this.decorationTypes.length, this.settings.overflow);
-        if (index === undefined) {
+        const slot = depthSlot(depth, this.decorationTypes.length);
+        if (slot === undefined) {
           continue;
         }
 
@@ -200,7 +202,7 @@ class DepthDecorationController implements vscode.Disposable {
           continue;
         }
 
-        groups[index].push(new vscode.Range(lineNumber, 0, lineNumber, endCharacter));
+        groups[slot].push(new vscode.Range(lineNumber, 0, lineNumber, endCharacter));
       }
     }
 
@@ -212,52 +214,84 @@ class DepthDecorationController implements vscode.Disposable {
 
 function readSettings(): Settings {
   const configuration = vscode.workspace.getConfiguration(CONFIGURATION_SECTION);
-  const colors = readColorArray(configuration, 'colors', FALLBACK_COLORS);
-  const configuredOverflow = configuration.get<string>('overflow', 'clamp');
   const configuredRenderStyle = configuration.get<string>('renderStyle', 'wholeLine');
-  const configuredIndentSize = configuration.get<number>('indentSize', 0);
+  const configuredTintMode = configuration.get<string>('tintMode', 'auto');
+  const indentSize = readInteger(configuration, 'indentSize', 0, 0, 32);
+  const minimumOpacity = readNumber(configuration, 'minimumOpacity', 0.012, 0, 1);
+  const maximumOpacity = Math.max(
+    minimumOpacity,
+    readNumber(configuration, 'maximumOpacity', 0.11, 0, 1),
+  );
 
   return {
     enabled: configuration.get<boolean>('enabled', true),
-    colors,
-    lightColors: readColorArray(configuration, 'lightColors', []),
-    darkColors: readColorArray(configuration, 'darkColors', []),
-    overflow: configuredOverflow === 'cycle' ? 'cycle' : 'clamp',
     renderStyle: configuredRenderStyle === 'indentation' ? 'indentation' : 'wholeLine',
-    indentSize: Number.isFinite(configuredIndentSize)
-      ? Math.max(0, Math.floor(configuredIndentSize))
-      : 0,
+    indentSize,
+    maxDepth: readInteger(configuration, 'maxDepth', 16, 1, 64),
+    tintMode: isTintMode(configuredTintMode) ? configuredTintMode : 'auto',
+    customTint: normalizeHexColor(
+      configuration.get<string>('customTint', DEFAULT_CUSTOM_TINT),
+      DEFAULT_CUSTOM_TINT,
+    ),
+    minimumOpacity,
+    maximumOpacity,
+    curveExponent: readNumber(configuration, 'curveExponent', 1.4, 0.1, 5),
   };
 }
 
-function readColorArray(
-  configuration: vscode.WorkspaceConfiguration,
-  key: string,
-  fallback: readonly string[],
-): readonly string[] {
-  const configured = configuration.get<unknown[]>(key, [...fallback]);
-  const colors = configured
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+function resolveTint(settings: Settings, themeKind: vscode.ColorThemeKind): string {
+  if (settings.tintMode === 'lighter') {
+    return LIGHT_TINT;
+  }
 
-  return colors.length > 0 ? colors : fallback;
+  if (settings.tintMode === 'darker') {
+    return DARK_TINT;
+  }
+
+  if (settings.tintMode === 'custom') {
+    return settings.customTint;
+  }
+
+  return isLightTheme(themeKind) ? DARK_TINT : LIGHT_TINT;
 }
 
-function colorAt(
-  colors: readonly string[],
-  index: number,
-  overflow: PaletteOverflow,
-): string | undefined {
-  if (colors.length === 0) {
-    return undefined;
+function isLightTheme(themeKind: vscode.ColorThemeKind): boolean {
+  return themeKind === vscode.ColorThemeKind.Light
+    || themeKind === vscode.ColorThemeKind.HighContrastLight;
+}
+
+function isTintMode(value: string): value is TintMode {
+  return value === 'auto' || value === 'lighter' || value === 'darker' || value === 'custom';
+}
+
+function readInteger(
+  configuration: vscode.WorkspaceConfiguration,
+  key: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const configured = configuration.get<number>(key, fallback);
+  if (!Number.isFinite(configured)) {
+    return fallback;
   }
 
-  if (overflow === 'cycle') {
-    return colors[index % colors.length];
+  return Math.min(maximum, Math.max(minimum, Math.floor(configured)));
+}
+
+function readNumber(
+  configuration: vscode.WorkspaceConfiguration,
+  key: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const configured = configuration.get<number>(key, fallback);
+  if (!Number.isFinite(configured)) {
+    return fallback;
   }
 
-  return colors[Math.min(index, colors.length - 1)];
+  return Math.min(maximum, Math.max(minimum, configured));
 }
 
 export function activate(context: vscode.ExtensionContext): void {
