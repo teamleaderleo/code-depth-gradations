@@ -2,84 +2,163 @@
   "name": "code-depth-gradations",
   "publisher": "teamleaderleo",
   "displayName": "Code Depth Gradations",
-  "description": "Visualize code depth through background color gradations based on indentation levels",
-  "version": "0.0.1",
+  "description": "Show indentation depth with lightweight, theme-relative whole-line gradations.",
+  "version": "0.1.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/teamleaderleo/code-depth-gradations"
+    "url": "https://github.com/teamleaderleo/code-depth-gradations.git"
   },
-  "icon": "icon.png",
+  "bugs": {
+    "url": "https://github.com/teamleaderleo/code-depth-gradations/issues"
+  },
+  "homepage": "https://github.com/teamleaderleo/code-depth-gradations#readme",
   "keywords": [
     "indentation",
+    "depth",
+    "gradations",
     "visualization",
-    "code depth",
-    "formatting",
-    "color",
-    "background",
     "readability"
   ],
   "categories": [
-    "Other",
-    "Formatters",
-    "Visualization"
+    "Visualization",
+    "Other"
   ],
   "engines": {
-    "vscode": "^1.86.0"
+    "vscode": "^1.86.0",
+    "node": ">=20"
   },
-  "license": "MIT",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:code-depth-gradations.toggle",
+    "onCommand:code-depth-gradations.refresh"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "contributes": {
     "commands": [
       {
         "command": "code-depth-gradations.toggle",
-        "title": "Toggle Code Depth Gradations"
+        "title": "Code Depth Gradations: Toggle"
+      },
+      {
+        "command": "code-depth-gradations.refresh",
+        "title": "Code Depth Gradations: Refresh"
       }
     ],
     "configuration": {
       "title": "Code Depth Gradations",
+      "type": "object",
       "properties": {
         "codeDepthGradations.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable/disable code depth visualization"
+          "description": "Show indentation-depth gradations in text editors."
         },
-        "codeDepthGradations.colors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "rgba(255, 255, 255, 0.1)",
-            "rgba(64, 128, 255, 0.1)",
-            "rgba(128, 64, 255, 0.1)",
-            "rgba(255, 64, 128, 0.1)",
-            "rgba(64, 255, 128, 0.1)"
+        "codeDepthGradations.indentSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 0,
+          "description": "Columns per depth level. Zero uses each editor's detected tab size."
+        },
+        "codeDepthGradations.renderStyle": {
+          "type": "string",
+          "enum": [
+            "wholeLine",
+            "indentation"
           ],
-          "description": "Colors for different depth levels (RGBA format)"
+          "enumDescriptions": [
+            "Tint the complete line with one solid shade.",
+            "Tint only the leading whitespace."
+          ],
+          "default": "wholeLine",
+          "description": "Area covered by each depth gradation."
+        },
+        "codeDepthGradations.maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 16,
+          "description": "Number of distinct depth shades. Deeper lines keep the final shade."
+        },
+        "codeDepthGradations.tintMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "lighter",
+            "darker",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "Lighten dark themes and darken light themes.",
+            "Blend white into the active editor background.",
+            "Blend black into the active editor background.",
+            "Blend the custom tint into the active editor background."
+          ],
+          "default": "auto",
+          "description": "How depth shades move away from the active theme's editor background."
+        },
+        "codeDepthGradations.customTint": {
+          "type": "string",
+          "default": "#7c3aed",
+          "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "patternErrorMessage": "Use a 3- or 6-digit hex color such as #7c3aed.",
+          "description": "Tint used when tintMode is custom. The tint stays translucent and blends with the editor background."
+        },
+        "codeDepthGradations.minimumOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.012,
+          "description": "Tint opacity at indentation depth 1."
+        },
+        "codeDepthGradations.maximumOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.11,
+          "description": "Tint opacity at maxDepth and beyond."
+        },
+        "codeDepthGradations.curveExponent": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 5,
+          "default": 1.4,
+          "description": "Controls how the tint grows with depth. One is linear; larger values keep shallow levels subtler."
         }
       }
     }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
+    "compile": "webpack --mode development",
+    "watch": "webpack --watch --mode development",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "lint": "eslint src"
+    "typecheck": "tsc --noEmit",
+    "compile:test": "tsc -p tsconfig.test.json",
+    "test": "npm run compile:test && node --test .test-dist/test/depth.test.js",
+    "compile:integration": "tsc -p tsconfig.integration.json",
+    "test:integration": "npm run compile:integration && node scripts/run-integration-tests.mjs",
+    "lint": "eslint src test integration",
+    "package:vsix": "vsce package --out code-depth-gradations.vsix",
+    "inspect:vsix": "node scripts/verify-vsix.mjs code-depth-gradations.vsix",
+    "check": "npm run lint && npm run typecheck && npm test && npm run package && npm run package:vsix && npm run inspect:vsix"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
-    "@types/node": "~18.19.74",
+    "@types/node": "^18.19.74",
     "@types/vscode": "^1.86.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.57.0",
-    "globals": "^15.14.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
+    "eslint": "^9.19.0",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.22.0",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4"
   }

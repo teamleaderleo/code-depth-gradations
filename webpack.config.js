@@ -1,18 +1,17 @@
-//@ts-check
 'use strict';
 
-const path = require('path');
+const path = require('node:path');
 
 /** @type {import('webpack').Configuration} */
-const config = {
+module.exports = {
   target: 'node',
   mode: 'none',
-
   entry: './src/extension.ts',
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    clean: true
   },
   externals: {
     vscode: 'commonjs vscode'
@@ -25,15 +24,9 @@ const config = {
       {
         test: /\.ts$/,
         exclude: /node_modules/,
-        use: [
-          {
-            loader: 'ts-loader'
-          }
-        ]
+        use: 'ts-loader'
       }
     ]
   },
   devtool: 'nosources-source-map'
 };
-
-module.exports = config;
