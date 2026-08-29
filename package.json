@@ -25,7 +25,8 @@
     "Other"
   ],
   "engines": {
-    "vscode": "^1.86.0"
+    "vscode": "^1.86.0",
+    "node": ">=20"
   },
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -140,14 +141,20 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "typecheck": "tsc --noEmit",
     "compile:test": "tsc -p tsconfig.test.json",
-    "test": "npm run compile:test && node --test .test-dist/test",
-    "lint": "eslint src test",
-    "check": "npm run lint && npm run typecheck && npm test && npm run package"
+    "test": "npm run compile:test && node --test .test-dist/test/depth.test.js",
+    "compile:integration": "tsc -p tsconfig.integration.json",
+    "test:integration": "npm run compile:integration && node scripts/run-integration-tests.mjs",
+    "lint": "eslint src test integration",
+    "package:vsix": "vsce package --out code-depth-gradations.vsix",
+    "inspect:vsix": "node scripts/verify-vsix.mjs code-depth-gradations.vsix",
+    "check": "npm run lint && npm run typecheck && npm test && npm run package && npm run package:vsix && npm run inspect:vsix"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
     "@types/node": "^18.19.74",
     "@types/vscode": "^1.86.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
     "eslint": "^9.19.0",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.3",

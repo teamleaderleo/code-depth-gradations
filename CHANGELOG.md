@@ -11,3 +11,6 @@
 - Keep indentation-only rendering as an optional compact mode.
 - Add toggle and refresh commands.
 - Add tests for indentation counting, shade slots, opacity curves, and tint conversion.
+- Bound visible work and fail closed on huge or minified editor views.
+- Add a locked toolchain, read-only pinned CI, extension-host smoke test, and exact VSIX allowlist.
+- Document the visual-only runtime contract, privacy properties, and reproducible release procedure.

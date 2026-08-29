@@ -15,6 +15,11 @@ const REFRESH_COMMAND = 'code-depth-gradations.refresh';
 const LIGHT_TINT = '#ffffff';
 const DARK_TINT = '#000000';
 const DEFAULT_CUSTOM_TINT = '#7c3aed';
+const REFRESH_DELAY_MILLISECONDS = 35;
+const MAX_PENDING_EDITORS = 32;
+const MAX_VISIBLE_LINES_PER_EDITOR = 1_000;
+const MAX_VISIBLE_CHARACTERS_PER_EDITOR = 250_000;
+const MAX_LINE_LENGTH = 20_000;
 
 type RenderStyle = 'wholeLine' | 'indentation';
 
@@ -34,7 +39,7 @@ class DepthDecorationController implements vscode.Disposable {
   private decorationTypes: vscode.TextEditorDecorationType[] = [];
   private settings: Settings = readSettings();
   private readonly pendingEditors = new Set<vscode.TextEditor>();
-  private flushQueued = false;
+  private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
   public constructor(context: vscode.ExtensionContext) {
@@ -89,6 +94,10 @@ class DepthDecorationController implements vscode.Disposable {
 
     this.disposed = true;
     this.pendingEditors.clear();
+    if (this.flushTimer !== undefined) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
     this.disposeDecorationTypes();
   }
 
@@ -99,25 +108,28 @@ class DepthDecorationController implements vscode.Disposable {
   }
 
   private schedule(editor: vscode.TextEditor): void {
-    if (this.disposed) {
+    if (
+      this.disposed
+      || !vscode.window.visibleTextEditors.includes(editor)
+      || (!this.pendingEditors.has(editor) && this.pendingEditors.size >= MAX_PENDING_EDITORS)
+    ) {
       return;
     }
 
     this.pendingEditors.add(editor);
-    if (this.flushQueued) {
+    if (this.flushTimer !== undefined) {
       return;
     }
 
-    this.flushQueued = true;
-    queueMicrotask(() => {
-      this.flushQueued = false;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = undefined;
       const editors = [...this.pendingEditors];
       this.pendingEditors.clear();
 
       for (const pendingEditor of editors) {
         this.applyDecorations(pendingEditor);
       }
-    });
+    }, REFRESH_DELAY_MILLISECONDS);
   }
 
   private rebuildDecorationTypes(): void {
@@ -174,6 +186,7 @@ class DepthDecorationController implements vscode.Disposable {
 
     const groups = this.decorationTypes.map(() => [] as vscode.Range[]);
     const renderedLines = new Set<number>();
+    let scannedCharacters = 0;
     const indentSize = this.settings.indentSize > 0
       ? this.settings.indentSize
       : normalizeIndentSize(editor.options.tabSize, 4);
@@ -188,7 +201,20 @@ class DepthDecorationController implements vscode.Disposable {
         }
         renderedLines.add(lineNumber);
 
+        if (renderedLines.size > MAX_VISIBLE_LINES_PER_EDITOR) {
+          this.clearDecorations(editor);
+          return;
+        }
+
         const line = editor.document.lineAt(lineNumber);
+        scannedCharacters += line.text.length;
+        if (
+          line.text.length > MAX_LINE_LENGTH
+          || scannedCharacters > MAX_VISIBLE_CHARACTERS_PER_EDITOR
+        ) {
+          this.clearDecorations(editor);
+          return;
+        }
         const depth = indentationDepth(line.text, indentSize);
         const slot = depthSlot(depth, this.decorationTypes.length);
         if (slot === undefined) {
@@ -208,6 +234,12 @@ class DepthDecorationController implements vscode.Disposable {
 
     for (let index = 0; index < this.decorationTypes.length; index += 1) {
       editor.setDecorations(this.decorationTypes[index], groups[index]);
+    }
+  }
+
+  private clearDecorations(editor: vscode.TextEditor): void {
+    for (const decorationType of this.decorationTypes) {
+      editor.setDecorations(decorationType, []);
     }
   }
 }
